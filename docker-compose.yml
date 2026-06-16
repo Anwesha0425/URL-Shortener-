@@ -239,6 +239,18 @@ services:
       kafka:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: url_frontend
+    ports:
+      - "4000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
+    depends_on:
+      - url-service
+
 volumes:
   postgres_data:
   clickhouse_data:

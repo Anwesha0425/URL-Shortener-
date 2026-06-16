@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #050505;
+  --foreground: #f0f0f0;
+  
+  --primary: #8b5cf6;
+  --primary-glow: rgba(139, 92, 246, 0.5);
+  
+  --secondary: #3b82f6;
+  --secondary-glow: rgba(59, 130, 246, 0.5);
+  
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  background-image: 
+    radial-gradient(circle at 15% 50%, rgba(139, 92, 246, 0.15), transparent 25%),
+    radial-gradient(circle at 85% 30%, rgba(59, 130, 246, 0.15), transparent 25%);
+  background-attachment: fixed;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-xl rounded-2xl shadow-2xl;
+  }
+  
+  .glass-input {
+    @apply bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all duration-300;
+  }
+  
+  .glowing-btn {
+    @apply relative overflow-hidden bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium rounded-xl px-6 py-3 hover:from-purple-500 hover:to-blue-500 transition-all duration-300 shadow-[0_0_20px_var(--primary-glow)] hover:shadow-[0_0_30px_var(--secondary-glow)] transform hover:-translate-y-0.5 active:translate-y-0;
+  }
+  
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-blue-400;
+  }
+}

@@ -94,12 +94,7 @@ class ClickEventConsumer:
 
                 # Push real-time update via WebSockets
                 if self.ws_manager:
-                    asyncio.create_task(
-                        self.ws_manager.broadcast_to_room(
-                            event.get("short_code", ""),
-                            {"type": "click", "data": event}
-                        )
-                    )
+                    asyncio.create_task(self.ws_manager.broadcast_click(event))
 
                 # Flush if batch is full
                 if len(self.batch) >= self.batch_size:
@@ -126,11 +121,24 @@ class ClickEventConsumer:
         try:
             # clickhouse_connect is synchronous, so we use run_in_executor to avoid blocking the event loop
             loop = asyncio.get_event_loop()
+            
+            # ClickHouse connect expects a sequence of sequences (list of tuples), not list of dicts
+            insert_data = [
+                (
+                    row["short_code"],
+                    row["clicked_at"],
+                    row["country"],
+                    row["referrer"],
+                    row["user_agent"],
+                    row["ip_hash"]
+                ) for row in batch_to_flush
+            ]
+
             await loop.run_in_executor(
                 None,
                 lambda: self.ch_client.insert(
                     "url_clicks",
-                    batch_to_flush,
+                    insert_data,
                     column_names=[
                         "short_code",
                         "clicked_at",

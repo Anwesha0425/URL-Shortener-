@@ -2,6 +2,7 @@
 Kafka Consumer — Processes url.clicked events from Kafka
 Persists to ClickHouse for OLAP analytics queries
 """
+
 import asyncio
 import json
 import logging
@@ -27,10 +28,10 @@ processing_time = Histogram(
 class ClickEventConsumer:
     """
     Consumes url.clicked events from Kafka and stores in ClickHouse.
-    
+
     Consumer Group: analytics-aggregator
     Topic: url.clicked
-    
+
     Kafka guarantees: at-least-once delivery
     We handle idempotency by using ClickHouse's deduplication feature.
     """
@@ -41,8 +42,8 @@ class ClickEventConsumer:
         self.group_id = group_id
         self.ch_client = ch_client
         self.batch: list[dict] = []
-        self.batch_size = 100        # flush every 100 events
-        self.flush_interval = 5.0   # or every 5 seconds (whichever comes first)
+        self.batch_size = 100  # flush every 100 events
+        self.flush_interval = 5.0  # or every 5 seconds (whichever comes first)
 
     async def start(self):
         consumer = AIOKafkaConsumer(
@@ -75,14 +76,18 @@ class ClickEventConsumer:
         with processing_time.time():
             try:
                 event = message.value
-                self.batch.append({
-                    "short_code":   event.get("short_code", ""),
-                    "clicked_at":   event.get("timestamp", datetime.utcnow().isoformat()),
-                    "country":      event.get("country", "Unknown"),
-                    "referrer":     event.get("referrer", ""),
-                    "user_agent":   event.get("user_agent", ""),
-                    "ip_hash":      event.get("ip_hash", ""),
-                })
+                self.batch.append(
+                    {
+                        "short_code": event.get("short_code", ""),
+                        "clicked_at": event.get(
+                            "timestamp", datetime.utcnow().isoformat()
+                        ),
+                        "country": event.get("country", "Unknown"),
+                        "referrer": event.get("referrer", ""),
+                        "user_agent": event.get("user_agent", ""),
+                        "ip_hash": event.get("ip_hash", ""),
+                    }
+                )
 
                 events_consumed.labels(status="success").inc()
 
@@ -112,7 +117,14 @@ class ClickEventConsumer:
             await self.ch_client.insert(
                 "url_clicks",
                 batch_to_flush,
-                column_names=["short_code", "clicked_at", "country", "referrer", "user_agent", "ip_hash"],
+                column_names=[
+                    "short_code",
+                    "clicked_at",
+                    "country",
+                    "referrer",
+                    "user_agent",
+                    "ip_hash",
+                ],
             )
             logger.info(f"Flushed {len(batch_to_flush)} events to ClickHouse")
         except Exception as e:

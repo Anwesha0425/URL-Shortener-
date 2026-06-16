@@ -2,6 +2,7 @@
 Analytics API Router — Serves analytics queries from ClickHouse
 CQRS Read Model: completely separate from the write path
 """
+
 from datetime import datetime, timedelta
 from typing import Literal
 
@@ -33,11 +34,11 @@ async def get_summary(short_code: str):
 
     row = result.result_rows[0]
     return {
-        "short_code":      short_code,
-        "total_clicks":    row[0],
+        "short_code": short_code,
+        "total_clicks": row[0],
         "unique_visitors": row[1],
-        "first_click":     row[2],
-        "last_click":      row[3],
+        "first_click": row[2],
+        "last_click": row[3],
     }
 
 
@@ -54,8 +55,8 @@ async def get_timeseries(
     """
     trunc_fn = {
         "minute": "toStartOfMinute",
-        "hour":   "toStartOfHour",
-        "day":    "toStartOfDay",
+        "hour": "toStartOfHour",
+        "day": "toStartOfDay",
     }[granularity]
 
     result = await clickhouse_client.query(f"""
@@ -70,11 +71,10 @@ async def get_timeseries(
     """)
 
     return {
-        "short_code":   short_code,
-        "granularity":  granularity,
+        "short_code": short_code,
+        "granularity": granularity,
         "timeseries": [
-            {"period": str(row[0]), "clicks": row[1]}
-            for row in result.result_rows
+            {"period": str(row[0]), "clicks": row[1]} for row in result.result_rows
         ],
     }
 
@@ -126,7 +126,6 @@ async def get_referrers(short_code: str):
     return {
         "short_code": short_code,
         "referrers": [
-            {"source": row[0], "clicks": row[1]}
-            for row in result.result_rows
+            {"source": row[0], "clicks": row[1]} for row in result.result_rows
         ],
     }

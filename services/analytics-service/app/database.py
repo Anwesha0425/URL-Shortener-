@@ -1,6 +1,7 @@
 """
 ClickHouse client singleton for analytics queries
 """
+
 import clickhouse_connect
 from app.config import settings
 

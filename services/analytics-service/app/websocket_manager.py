@@ -13,14 +13,14 @@ Connection lifecycle:
   Click event fires  → compute live agg → broadcast to room
   Client disconnects → cleanup from room
 """
-import asyncio
+
 import json
 import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import DefaultDict, Set
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
@@ -65,12 +65,12 @@ class WebSocketManager:
         self._live_counts[short_code] += 1
 
         payload = {
-            "type":        "click_event",
-            "short_code":  short_code,
-            "country":     event.get("country", "Unknown"),
-            "referrer":    event.get("referrer", ""),
-            "timestamp":   event.get("timestamp", datetime.now(timezone.utc).isoformat()),
-            "live_count":  self._live_counts[short_code],
+            "type": "click_event",
+            "short_code": short_code,
+            "country": event.get("country", "Unknown"),
+            "referrer": event.get("referrer", ""),
+            "timestamp": event.get("timestamp", datetime.now(timezone.utc).isoformat()),
+            "live_count": self._live_counts[short_code],
         }
 
         # Broadcast to specific room
@@ -97,9 +97,10 @@ class WebSocketManager:
 
     def room_count(self) -> dict:
         return {
-            "rooms":           len(self._rooms),
-            "global_clients":  len(self._global),
-            "total_clients":   sum(len(s) for s in self._rooms.values()) + len(self._global),
+            "rooms": len(self._rooms),
+            "global_clients": len(self._global),
+            "total_clients": sum(len(s) for s in self._rooms.values())
+            + len(self._global),
         }
 
 

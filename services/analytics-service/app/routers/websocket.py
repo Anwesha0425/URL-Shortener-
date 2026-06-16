@@ -6,6 +6,7 @@ Endpoints:
   WS /ws/analytics/global        → Global overview (all events)
   GET /ws/stats                  → Connection pool stats
 """
+
 import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.websocket_manager import ws_manager
@@ -23,11 +24,13 @@ async def ws_analytics_room(ws: WebSocket, short_code: str):
     await ws_manager.connect(ws, short_code=short_code)
     try:
         # Send initial connection confirmation
-        await ws.send_json({
-            "type":       "connected",
-            "short_code": short_code,
-            "message":    f"Listening for live clicks on sho.rt/{short_code}",
-        })
+        await ws.send_json(
+            {
+                "type": "connected",
+                "short_code": short_code,
+                "message": f"Listening for live clicks on sho.rt/{short_code}",
+            }
+        )
         # Keep connection alive — wait for client disconnect
         while True:
             await ws.receive_text()
@@ -44,10 +47,12 @@ async def ws_global_room(ws: WebSocket):
     """
     await ws_manager.connect(ws, short_code=None)
     try:
-        await ws.send_json({
-            "type":    "connected",
-            "message": "Listening for all platform click events",
-        })
+        await ws.send_json(
+            {
+                "type": "connected",
+                "message": "Listening for all platform click events",
+            }
+        )
         while True:
             await ws.receive_text()
     except WebSocketDisconnect:

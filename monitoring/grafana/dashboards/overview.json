@@ -1,0 +1,157 @@
+{
+  "title": "URL Shortener Platform — Overview",
+  "uid": "url-shortener-overview",
+  "tags": ["url-shortener", "microservices"],
+  "timezone": "browser",
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Redirect Throughput (req/sec)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [{
+        "expr": "sum(rate(http_requests_total{service='redirect-service'}[1m]))",
+        "legendFormat": "req/sec"
+      }],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 50000},
+              {"color": "red", "value": 100000}
+            ]
+          },
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Redirect Latency p99",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [{
+        "expr": "histogram_quantile(0.99, sum by(le) (rate(http_request_duration_seconds_bucket{service='redirect-service'}[5m])))",
+        "legendFormat": "p99 latency"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "steps": [
+              {"color": "green",  "value": null},
+              {"color": "yellow", "value": 25},
+              {"color": "red",    "value": 50}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Redis Cache Hit Rate",
+      "type": "gauge",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [{
+        "expr": "rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) * 100",
+        "legendFormat": "hit rate %"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0, "max": 100,
+          "thresholds": {
+            "steps": [
+              {"color": "red",    "value": null},
+              {"color": "yellow", "value": 85},
+              {"color": "green",  "value": 95}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Error Rate",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "targets": [{
+        "expr": "sum(rate(http_requests_total{status=~'5..'}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+        "legendFormat": "error %"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "steps": [
+              {"color": "green",  "value": null},
+              {"color": "yellow", "value": 0.05},
+              {"color": "red",    "value": 0.1}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Redirect Latency Distribution",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(http_request_duration_seconds_bucket{service='redirect-service'}[5m]))) * 1000",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket{service='redirect-service'}[5m]))) * 1000",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(http_request_duration_seconds_bucket{service='redirect-service'}[5m]))) * 1000",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms" } }
+    },
+    {
+      "id": 6,
+      "title": "Kafka Consumer Lag",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [{
+        "expr": "kafka_consumer_group_lag",
+        "legendFormat": "{{topic}}"
+      }],
+      "options": {
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Active Pod Replicas",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 6 },
+      "targets": [
+        {
+          "expr": "kube_deployment_status_replicas_available{deployment='redirect-service'}",
+          "legendFormat": "redirect-service"
+        },
+        {
+          "expr": "kube_deployment_status_replicas_available{deployment='url-service'}",
+          "legendFormat": "url-service"
+        },
+        {
+          "expr": "kube_deployment_status_replicas_available{deployment='analytics-service'}",
+          "legendFormat": "analytics-service"
+        }
+      ]
+    }
+  ]
+}

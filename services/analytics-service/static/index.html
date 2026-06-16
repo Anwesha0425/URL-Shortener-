@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>URL Shortener — Live Analytics</title>
+  <meta name="description" content="Real-time click analytics dashboard for the URL Shortener platform"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Reset & Tokens ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #080b14;
+      --surface:      #0d1117;
+      --surface2:     #161b27;
+      --surface3:     #1c2333;
+      --border:       rgba(255,255,255,0.07);
+      --border-glow:  rgba(99,102,241,0.4);
+
+      --primary:      #6366f1;
+      --primary-dim:  rgba(99,102,241,0.15);
+      --accent:       #22d3ee;
+      --accent-dim:   rgba(34,211,238,0.12);
+      --green:        #10b981;
+      --green-dim:    rgba(16,185,129,0.12);
+      --amber:        #f59e0b;
+      --red:          #ef4444;
+
+      --text:         #e2e8f0;
+      --text-muted:   #64748b;
+      --text-dim:     #94a3b8;
+
+      --radius:       12px;
+      --radius-lg:    18px;
+      --shadow:       0 4px 24px rgba(0,0,0,0.4);
+      --shadow-glow:  0 0 40px rgba(99,102,241,0.15);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── Animated gradient background ───────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 20% 0%, rgba(99,102,241,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(34,211,238,0.06) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────── */
+    .app { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* ── Header ─────────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 32px;
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      background: rgba(13,17,23,0.8);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: -0.3px;
+    }
+
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .ws-badge {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      transition: all 0.3s;
+    }
+
+    .ws-badge.connected {
+      border-color: rgba(16,185,129,0.4);
+      color: var(--green);
+      background: var(--green-dim);
+    }
+
+    .ws-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background 0.3s;
+    }
+
+    .ws-badge.connected .ws-dot {
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.6; transform: scale(1.3); }
+    }
+
+    /* ── URL Search Bar ──────────────────────────────────────────── */
+    .search-bar {
+      padding: 20px 32px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .search-input {
+      flex: 1;
+      max-width: 420px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 16px;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .search-input::placeholder { color: var(--text-muted); font-family: 'Inter', sans-serif; }
+
+    .search-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-dim);
+    }
+
+    .btn {
+      background: linear-gradient(135deg, var(--primary), #4f46e5);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      padding: 10px 20px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+
+    .btn:hover  { opacity: 0.9; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+
+    /* ── Main Grid ───────────────────────────────────────────────── */
+    .main { flex: 1; padding: 0 32px 32px; display: flex; flex-direction: column; gap: 24px; }
+
+    /* ── KPI Cards ───────────────────────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 900px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 24px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s, transform 0.2s;
+    }
+
+    .kpi-card:hover {
+      border-color: var(--border-glow);
+      transform: translateY(-2px);
+    }
+
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0; right: 0;
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      opacity: 0.08;
+      transform: translate(20px, -20px);
+    }
+
+    .kpi-card.primary::before  { background: var(--primary); }
+    .kpi-card.accent::before   { background: var(--accent); }
+    .kpi-card.green::before    { background: var(--green); }
+    .kpi-card.amber::before    { background: var(--amber); }
+
+    .kpi-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .kpi-value {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      line-height: 1;
+      margin-bottom: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .kpi-card.primary .kpi-value { color: var(--primary); }
+    .kpi-card.accent  .kpi-value { color: var(--accent); }
+    .kpi-card.green   .kpi-value { color: var(--green); }
+    .kpi-card.amber   .kpi-value { color: var(--amber); }
+
+    .kpi-delta {
+      font-size: 12px;
+      color: var(--green);
+      font-weight: 500;
+    }
+
+    .kpi-delta.down { color: var(--red); }
+
+    /* ── Charts Grid ─────────────────────────────────────────────── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 1000px) { .charts-grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .card-badge {
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--primary-dim);
+      color: var(--primary);
+      border: 1px solid rgba(99,102,241,0.25);
+      border-radius: 100px;
+      padding: 3px 10px;
+    }
+
+    /* ── Live Events Feed ────────────────────────────────────────── */
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 1100px) { .bottom-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 700px)  { .bottom-grid { grid-template-columns: 1fr; } }
+
+    .feed {
+      height: 320px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .feed::-webkit-scrollbar { width: 4px; }
+    .feed::-webkit-scrollbar-track { background: transparent; }
+    .feed::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .feed-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+      animation: slideIn 0.3s ease;
+      transition: background 0.2s;
+    }
+
+    .feed-item:hover { background: var(--surface3); }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .feed-item .code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--primary);
+      font-weight: 500;
+      min-width: 55px;
+    }
+
+    .feed-item .flag { font-size: 16px; }
+
+    .feed-item .detail {
+      flex: 1;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .feed-item .time {
+      color: var(--text-muted);
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    /* ── Geo List ────────────────────────────────────────────────── */
+    .geo-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .geo-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .geo-label {
+      width: 90px;
+      font-size: 12px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .geo-bar-wrap {
+      flex: 1;
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .geo-bar {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      transition: width 0.6s ease;
+    }
+
+    .geo-pct {
+      font-size: 11px;
+      color: var(--text-muted);
+      min-width: 36px;
+      text-align: right;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── Referrers ───────────────────────────────────────────────── */
+    .referrer-list { display: flex; flex-direction: column; gap: 6px; }
+
+    .referrer-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: var(--surface2);
+      border-radius: 8px;
+      font-size: 12px;
+    }
+
+    .referrer-name { color: var(--text-dim); }
+    .referrer-count {
+      color: var(--accent);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    /* ── Empty state ─────────────────────────────────────────────── */
+    .empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      color: var(--text-muted);
+      font-size: 13px;
+      gap: 8px;
+    }
+
+    .empty-icon { font-size: 32px; opacity: 0.4; }
+
+    /* ── Number animation ────────────────────────────────────────── */
+    .number-update {
+      animation: numberPop 0.4s ease;
+    }
+
+    @keyframes numberPop {
+      0%  { transform: scale(1.1); color: var(--accent); }
+      100%{ transform: scale(1); }
+    }
+
+    /* ── Toast notification ──────────────────────────────────────── */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      background: var(--surface2);
+      border: 1px solid var(--border-glow);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      font-size: 12px;
+      color: var(--text-dim);
+      max-width: 300px;
+      animation: toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards;
+      box-shadow: var(--shadow-glow);
+    }
+
+    @keyframes toastIn  { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    @keyframes toastOut { from { opacity: 1; } to { opacity: 0; transform: translateY(10px); } }
+
+    /* ── Chart canvas ────────────────────────────────────────────── */
+    .chart-wrap { position: relative; height: 240px; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ───────────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="logo">
+      <div class="logo-icon">🔗</div>
+      Analytics
+    </div>
+    <div class="header-right">
+      <div class="ws-badge" id="wsBadge">
+        <div class="ws-dot" id="wsDot"></div>
+        <span id="wsLabel">Connecting...</span>
+      </div>
+      <span style="font-size:11px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;" id="clockEl"></span>
+    </div>
+  </header>
+
+  <!-- ── URL Search ────────────────────────────────────────────────── -->
+  <div class="search-bar">
+    <input
+      class="search-input"
+      id="codeInput"
+      type="text"
+      placeholder="Enter short code to track (e.g. aB3xY)"
+      value="aB3xY"
+    />
+    <button class="btn" onclick="subscribeToCode()">Track →</button>
+    <button class="btn" style="background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim);" onclick="subscribeGlobal()">Global View</button>
+  </div>
+
+  <!-- ── Main content ──────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+      <div class="kpi-card primary">
+        <div class="kpi-label">Total Clicks</div>
+        <div class="kpi-value" id="kpiTotal">0</div>
+        <div class="kpi-delta" id="kpiDelta">↑ Live</div>
+      </div>
+      <div class="kpi-card accent">
+        <div class="kpi-label">Live / min</div>
+        <div class="kpi-value" id="kpiRate">0</div>
+        <div class="kpi-delta">clicks this minute</div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-label">Unique Countries</div>
+        <div class="kpi-value" id="kpiCountries">0</div>
+        <div class="kpi-delta">geographic reach</div>
+      </div>
+      <div class="kpi-card amber">
+        <div class="kpi-label">WS Connections</div>
+        <div class="kpi-value" id="kpiWS">1</div>
+        <div class="kpi-delta">clients connected</div>
+      </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="charts-grid">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Clicks Over Time</span>
+          <span class="card-badge">LIVE</span>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="timeChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Traffic Sources</span>
+        </div>
+        <div class="chart-wrap" style="height:200px">
+          <canvas id="referrerChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Row -->
+    <div class="bottom-grid">
+
+      <!-- Live Event Feed -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">⚡ Live Events</span>
+          <span class="card-badge" id="feedCount">0 events</span>
+        </div>
+        <div class="feed" id="eventFeed">
+          <div class="empty">
+            <div class="empty-icon">📡</div>
+            Waiting for events...
+          </div>
+        </div>
+      </div>
+
+      <!-- Geo Breakdown -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🌍 Geographic Breakdown</span>
+        </div>
+        <div class="geo-list" id="geoList">
+          <div class="empty"><div class="empty-icon">🗺️</div>No data yet</div>
+        </div>
+      </div>
+
+      <!-- Top Referrers -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🔗 Top Referrers</span>
+        </div>
+        <div class="referrer-list" id="referrerList">
+          <div class="empty"><div class="empty-icon">🔗</div>No data yet</div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────
+const state = {
+  totalClicks: 0,
+  minuteClicks: 0,
+  countries: {},
+  referrers: {},
+  events: [],
+  ws: null,
+  currentCode: null,
+  isGlobal: false,
+  minuteTimer: null,
+};
+
+// ── WebSocket URL ─────────────────────────────────────────────────────
+const WS_BASE = (location.protocol === 'https:' ? 'wss://' : 'ws://') +
+  (location.hostname === 'localhost' ? 'localhost:8003' : location.host);
+
+// ── Clock ─────────────────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clockEl').textContent =
+    new Date().toLocaleTimeString('en-IN', { hour12: false });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── WebSocket ─────────────────────────────────────────────────────────
+function connect(url) {
+  if (state.ws) { state.ws.close(); }
+
+  const ws = new WebSocket(url);
+  state.ws = ws;
+
+  ws.onopen = () => {
+    setWsBadge(true);
+    toast('Connected — receiving live events');
+  };
+
+  ws.onclose = () => {
+    setWsBadge(false);
+    // Auto-reconnect after 3s
+    setTimeout(() => reconnect(), 3000);
+  };
+
+  ws.onerror = () => setWsBadge(false);
+
+  ws.onmessage = (e) => {
+    const event = JSON.parse(e.data);
+    if (event.type === 'connected') return;
+    handleEvent(event);
+  };
+}
+
+function reconnect() {
+  if (state.isGlobal) {
+    connect(`${WS_BASE}/ws/global`);
+  } else if (state.currentCode) {
+    connect(`${WS_BASE}/ws/analytics/${state.currentCode}`);
+  }
+}
+
+function subscribeToCode() {
+  const code = document.getElementById('codeInput').value.trim();
+  if (!code) return;
+  state.currentCode = code;
+  state.isGlobal    = false;
+  resetState();
+  connect(`${WS_BASE}/ws/analytics/${code}`);
+}
+
+function subscribeGlobal() {
+  state.isGlobal    = true;
+  state.currentCode = null;
+  resetState();
+  connect(`${WS_BASE}/ws/global`);
+}
+
+function resetState() {
+  state.totalClicks  = 0;
+  state.minuteClicks = 0;
+  state.countries    = {};
+  state.referrers    = {};
+  state.events       = [];
+  document.getElementById('eventFeed').innerHTML =
+    '<div class="empty"><div class="empty-icon">📡</div>Waiting for events...</div>';
+  document.getElementById('geoList').innerHTML =
+    '<div class="empty"><div class="empty-icon">🗺️</div>No data yet</div>';
+  document.getElementById('referrerList').innerHTML =
+    '<div class="empty"><div class="empty-icon">🔗</div>No data yet</div>';
+  updateKPIs();
+  resetChart();
+}
+
+// ── Event handling ────────────────────────────────────────────────────
+function handleEvent(event) {
+  state.totalClicks++;
+  state.minuteClicks++;
+
+  const country  = event.country  || 'Unknown';
+  const referrer = event.referrer || 'Direct';
+  const code     = event.short_code || state.currentCode || '?';
+
+  // Aggregate
+  state.countries[country]  = (state.countries[country]  || 0) + 1;
+  state.referrers[referrer] = (state.referrers[referrer] || 0) + 1;
+
+  // Add to events list (cap at 100)
+  state.events.unshift({ code, country, referrer, time: new Date() });
+  if (state.events.length > 100) state.events.pop();
+
+  // Update UI
+  updateKPIs();
+  addFeedItem(code, country, referrer);
+  updateGeo();
+  updateReferrers();
+  pushChartPoint();
+}
+
+// ── KPI Updates ───────────────────────────────────────────────────────
+function updateKPIs() {
+  animateNumber('kpiTotal',     state.totalClicks);
+  animateNumber('kpiRate',      state.minuteClicks);
+  animateNumber('kpiCountries', Object.keys(state.countries).length);
+}
+
+function animateNumber(id, value) {
+  const el = document.getElementById(id);
+  el.textContent = value.toLocaleString();
+  el.classList.remove('number-update');
+  void el.offsetWidth;
+  el.classList.add('number-update');
+}
+
+// Reset minute counter every 60s
+setInterval(() => { state.minuteClicks = 0; }, 60_000);
+
+// ── Event Feed ────────────────────────────────────────────────────────
+const countryFlags = {
+  IN: '🇮🇳', US: '🇺🇸', GB: '🇬🇧', DE: '🇩🇪', JP: '🇯🇵',
+  FR: '🇫🇷', BR: '🇧🇷', CA: '🇨🇦', AU: '🇦🇺', SG: '🇸🇬',
+};
+
+function addFeedItem(code, country, referrer) {
+  const feed = document.getElementById('eventFeed');
+
+  // Remove empty state
+  if (feed.querySelector('.empty')) feed.innerHTML = '';
+
+  const flag = countryFlags[country] || '🌐';
+  const now  = new Date();
+  const time = now.toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  const item = document.createElement('div');
+  item.className = 'feed-item';
+  item.innerHTML = `
+    <span class="code">${code}</span>
+    <span class="flag">${flag}</span>
+    <span class="detail">${referrer}</span>
+    <span class="time">${time}</span>
+  `;
+
+  feed.insertBefore(item, feed.firstChild);
+  if (feed.children.length > 50) feed.removeChild(feed.lastChild);
+
+  document.getElementById('feedCount').textContent = `${state.totalClicks} events`;
+}
+
+// ── Geo Breakdown ─────────────────────────────────────────────────────
+function updateGeo() {
+  const total  = state.totalClicks;
+  const sorted = Object.entries(state.countries)
+    .sort(([,a],[,b]) => b - a)
+    .slice(0, 8);
+
+  document.getElementById('geoList').innerHTML = sorted.map(([country, count]) => {
+    const pct  = total ? ((count / total) * 100).toFixed(1) : '0.0';
+    const flag = countryFlags[country] || '🌐';
+    return `
+      <div class="geo-row">
+        <div class="geo-label">${flag} ${country}</div>
+        <div class="geo-bar-wrap">
+          <div class="geo-bar" style="width:${pct}%"></div>
+        </div>
+        <div class="geo-pct">${pct}%</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Referrers ─────────────────────────────────────────────────────────
+function updateReferrers() {
+  const sorted = Object.entries(state.referrers)
+    .sort(([,a],[,b]) => b - a)
+    .slice(0, 6);
+
+  document.getElementById('referrerList').innerHTML = sorted.map(([src, count]) => `
+    <div class="referrer-row">
+      <span class="referrer-name">${src}</span>
+      <span class="referrer-count">${count.toLocaleString()}</span>
+    </div>
+  `).join('');
+}
+
+// ── Chart.js ──────────────────────────────────────────────────────────
+const MAX_POINTS = 30;
+const timeLabels = [];
+const timeData   = [];
+
+let timeChart = null;
+let referrerChart = null;
+
+function initCharts() {
+  const commonOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 300 },
+    plugins: { legend: { display: false } },
+  };
+
+  // Line chart — clicks over time
+  timeChart = new Chart(document.getElementById('timeChart'), {
+    type: 'line',
+    data: {
+      labels:   timeLabels,
+      datasets: [{
+        data:            timeData,
+        borderColor:     '#6366f1',
+        backgroundColor: 'rgba(99,102,241,0.08)',
+        borderWidth:     2,
+        pointRadius:     0,
+        tension:         0.4,
+        fill:            true,
+      }],
+    },
+    options: {
+      ...commonOptions,
+      scales: {
+        x: { display: false },
+        y: {
+          beginAtZero: true,
+          grid:  { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#64748b', font: { size: 11 } },
+        },
+      },
+    },
+  });
+
+  // Doughnut chart — traffic sources
+  referrerChart = new Chart(document.getElementById('referrerChart'), {
+    type: 'doughnut',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: DOUGHNUT_COLORS, borderWidth: 0 }] },
+    options: {
+      ...commonOptions,
+      cutout: '72%',
+      plugins: {
+        legend: {
+          display: true,
+          position: 'right',
+          labels: { color: '#94a3b8', font: { size: 11 }, boxWidth: 10, padding: 12 },
+        },
+      },
+    },
+  });
+}
+
+const DOUGHNUT_COLORS = ['#6366f1','#22d3ee','#10b981','#f59e0b','#ef4444','#8b5cf6'];
+
+let lastChartSecond = 0;
+let secondCount = 0;
+
+function pushChartPoint() {
+  const sec = Math.floor(Date.now() / 1000);
+  if (sec === lastChartSecond) {
+    secondCount++;
+    if (timeData.length) timeData[timeData.length - 1] = secondCount;
+  } else {
+    lastChartSecond = sec;
+    secondCount = 1;
+    const t = new Date().toLocaleTimeString('en', { hour12: false });
+    timeLabels.push(t);
+    timeData.push(1);
+    if (timeLabels.length > MAX_POINTS) { timeLabels.shift(); timeData.shift(); }
+  }
+  timeChart.update('none');
+
+  // Update doughnut
+  const sorted = Object.entries(state.referrers).sort(([,a],[,b]) => b - a).slice(0, 6);
+  referrerChart.data.labels   = sorted.map(([s]) => s);
+  referrerChart.data.datasets[0].data = sorted.map(([,c]) => c);
+  referrerChart.update('none');
+}
+
+function resetChart() {
+  timeLabels.length = 0;
+  timeData.length   = 0;
+  if (timeChart) timeChart.update();
+  if (referrerChart) {
+    referrerChart.data.labels   = [];
+    referrerChart.data.datasets[0].data = [];
+    referrerChart.update();
+  }
+}
+
+// ── WS Badge ──────────────────────────────────────────────────────────
+function setWsBadge(connected) {
+  const badge = document.getElementById('wsBadge');
+  const label = document.getElementById('wsLabel');
+  badge.className = 'ws-badge' + (connected ? ' connected' : '');
+  label.textContent = connected ? 'Live' : 'Reconnecting...';
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────
+function toast(msg) {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3100);
+}
+
+// ── Demo mode (when no WebSocket) ────────────────────────────────────
+function startDemo() {
+  const codes     = ['aB3xY','zK9mP','Qr7nL','Wx2sT'];
+  const countries = ['IN','US','GB','DE','JP','FR','BR','SG'];
+  const referrers = ['google.com','twitter.com','Direct','linkedin.com','github.com'];
+
+  setInterval(() => {
+    const event = {
+      type:       'click_event',
+      short_code: codes[Math.floor(Math.random() * codes.length)],
+      country:    countries[Math.floor(Math.random() * countries.length)],
+      referrer:   referrers[Math.floor(Math.random() * referrers.length)],
+      timestamp:  new Date().toISOString(),
+    };
+    handleEvent(event);
+  }, 600 + Math.random() * 800);
+
+  document.getElementById('kpiWS').textContent = '1 (demo)';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────
+initCharts();
+
+// Try to connect to real WS, fall back to demo after 3s
+const tryConnect = () => {
+  try {
+    connect(`${WS_BASE}/ws/analytics/aB3xY`);
+    state.currentCode = 'aB3xY';
+    // If WS doesn't connect in 3s, start demo
+    setTimeout(() => {
+      if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+        setWsBadge(false);
+        document.getElementById('wsLabel').textContent = 'Demo Mode';
+        startDemo();
+      }
+    }, 3000);
+  } catch {
+    startDemo();
+  }
+};
+
+tryConnect();
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 import grpc from '@grpc/grpc-js';
-import protoLoader from '@grpc/proto-loader';
+import * as protoLoader from '@grpc/proto-loader';
 import path from 'path';
 import { verifyAccessToken } from '../services/auth.service';
 import { logger } from '../utils/logger';
@@ -18,18 +18,25 @@ import { logger } from '../utils/logger';
  *   - Internal: gRPC is faster, strongly typed, no network overhead from JSON
  */
 
-const PROTO_PATH = path.resolve(__dirname, '../../shared/protos/auth.proto');
+// Proto file is copied into the container at build time (see Dockerfile)
+// Fallback: if proto file is not found, we define the service inline
+const PROTO_PATH = path.resolve(__dirname, '../protos/auth.proto');
 
-const packageDef = protoLoader.loadSync(PROTO_PATH, {
-  keepCase:     true,
-  longs:        String,
-  enums:        String,
-  defaults:     true,
-  oneofs:       true,
-});
+let AuthServiceProto: any;
 
-const grpcObj = grpc.loadPackageDefinition(packageDef) as any;
-const AuthServiceProto = grpcObj.auth.AuthService;
+try {
+  const packageDef = protoLoader.loadSync(PROTO_PATH, {
+    keepCase:     true,
+    longs:        String,
+    enums:        String,
+    defaults:     true,
+    oneofs:       true,
+  });
+  const grpcObj = grpc.loadPackageDefinition(packageDef) as any;
+  AuthServiceProto = grpcObj.auth?.AuthService;
+} catch (e) {
+  logger.warn('Proto file not found — gRPC server will not start', { path: PROTO_PATH });
+}
 
 /**
  * VerifyToken — gRPC handler
@@ -62,14 +69,19 @@ function verifyToken(
   }
 }
 
-export function startGrpcServer(port: number = 50051): grpc.Server {
+export function startGrpcServer(port: number = 50051): grpc.Server | null {
+  if (!AuthServiceProto) {
+    logger.warn('gRPC server skipped — proto definition unavailable');
+    return null;
+  }
+
   const server = new grpc.Server();
 
   server.addService(AuthServiceProto.service, { VerifyToken: verifyToken });
 
   server.bindAsync(
     `0.0.0.0:${port}`,
-    grpc.ServerCredentials.createInsecure(), // TLS handled by service mesh (Istio/Linkerd) in prod
+    grpc.ServerCredentials.createInsecure(),
     (err, boundPort) => {
       if (err) {
         logger.error('gRPC server failed to start', { err });

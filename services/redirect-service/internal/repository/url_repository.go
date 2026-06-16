@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
@@ -12,6 +13,7 @@ type URLRecord struct {
 	ShortCode   string
 	OriginalURL string
 	IsActive    bool
+	ExpiresAt   *time.Time
 }
 
 type URLRepository struct {
@@ -28,11 +30,11 @@ func NewURLRepository(db *pgxpool.Pool, logger *zap.Logger) *URLRepository {
 func (r *URLRepository) GetByShortCode(ctx context.Context, shortCode string) (*URLRecord, error) {
 	var rec URLRecord
 	err := r.db.QueryRow(ctx,
-		`SELECT short_code, original_url, is_active
+		`SELECT short_code, original_url, is_active, expires_at
 		 FROM urls
 		 WHERE short_code = $1 AND is_active = true`,
 		shortCode,
-	).Scan(&rec.ShortCode, &rec.OriginalURL, &rec.IsActive)
+	).Scan(&rec.ShortCode, &rec.OriginalURL, &rec.IsActive, &rec.ExpiresAt)
 	if err != nil {
 		return nil, fmt.Errorf("url not found: %w", err)
 	}

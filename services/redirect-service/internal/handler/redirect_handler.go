@@ -26,10 +26,16 @@ func (h *RedirectHandler) Redirect(c *gin.Context) {
 		return
 	}
 
-	originalURL, err := h.svc.Resolve(c.Request.Context(), shortCode)
+	req := service.RedirectRequest{
+		IP:        c.ClientIP(),
+		UserAgent: c.GetHeader("User-Agent"),
+		Referrer:  c.GetHeader("Referer"),
+	}
+
+	originalURL, err := h.svc.Resolve(c.Request.Context(), shortCode, req)
 	if err != nil {
-		h.logger.Debug("short code not found", zap.String("code", shortCode))
-		c.JSON(http.StatusNotFound, gin.H{"error": "URL not found"})
+		h.logger.Debug("short code not found or expired", zap.String("code", shortCode), zap.Error(err))
+		c.JSON(http.StatusNotFound, gin.H{"error": "URL not found or expired"})
 		return
 	}
 

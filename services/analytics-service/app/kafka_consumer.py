@@ -36,11 +36,12 @@ class ClickEventConsumer:
     We handle idempotency by using ClickHouse's deduplication feature.
     """
 
-    def __init__(self, brokers: str, topic: str, group_id: str, ch_client):
+    def __init__(self, brokers: str, topic: str, group_id: str, ch_client, ws_manager=None):
         self.brokers = brokers
         self.topic = topic
         self.group_id = group_id
         self.ch_client = ch_client
+        self.ws_manager = ws_manager
         self.batch: list[dict] = []
         self.batch_size = 100  # flush every 100 events
         self.flush_interval = 5.0  # or every 5 seconds (whichever comes first)
@@ -90,6 +91,15 @@ class ClickEventConsumer:
                 )
 
                 events_consumed.labels(status="success").inc()
+
+                # Push real-time update via WebSockets
+                if self.ws_manager:
+                    asyncio.create_task(
+                        self.ws_manager.broadcast_to_room(
+                            event.get("short_code", ""),
+                            {"type": "click", "data": event}
+                        )
+                    )
 
                 # Flush if batch is full
                 if len(self.batch) >= self.batch_size:

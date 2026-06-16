@@ -39,7 +39,7 @@ type AuthClient struct {
 
 // NewAuthClient creates a new gRPC connection to auth-service
 func NewAuthClient(target string, logger *zap.Logger) (*AuthClient, error) {
-	conn, err := grpc.NewClient(
+	conn, err := grpc.Dial(
 		target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()), // TLS at service mesh level
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{

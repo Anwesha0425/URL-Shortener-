@@ -7,7 +7,6 @@ require (
 	github.com/jackc/pgx/v5 v5.5.0
 	github.com/redis/go-redis/v9 v9.3.0
 	github.com/segmentio/kafka-go v0.4.44
-	github.com/spaolacci/murmur3 v1.1.0
 	go.opentelemetry.io/otel v1.21.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.21.0
 	go.opentelemetry.io/otel/sdk v1.21.0

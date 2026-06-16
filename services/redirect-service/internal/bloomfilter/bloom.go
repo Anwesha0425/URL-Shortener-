@@ -1,10 +1,9 @@
 package bloomfilter
 
 import (
+	"hash/fnv"
 	"math"
 	"sync"
-
-	"github.com/spaolacci/murmur3"
 )
 
 /**
@@ -112,12 +111,20 @@ func (bf *BloomFilter) FalsePositiveRate() float64 {
 
 // ── Internal hash functions ───────────────────────────────────────
 
-// hashPair returns two independent 64-bit hashes using MurmurHash3.
+// hashPair returns two independent 64-bit hashes using FNV-1a.
 // We use the "double hashing" technique to simulate k independent hashes.
 func hashPair(key string) (uint64, uint64) {
 	data := []byte(key)
-	h1 := uint64(murmur3.Sum32(data))
-	h2 := uint64(murmur3.Sum32WithSeed(data, 0xDEADBEEF))
+
+	h := fnv.New64a()
+	h.Write(data)
+	h1 := h.Sum64()
+
+	h = fnv.New64a()
+	h.Write(data)
+	h.Write([]byte{0xDE, 0xAD, 0xBE, 0xEF})
+	h2 := h.Sum64()
+
 	return h1, h2
 }
 

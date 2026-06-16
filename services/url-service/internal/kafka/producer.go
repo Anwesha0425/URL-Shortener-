@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 
@@ -94,7 +95,7 @@ func (p *OutboxPoller) processOutbox(ctx context.Context) {
 
 	for _, event := range events {
 		topic := eventToTopic(event.EventType)
-		if err := p.producer.Publish(ctx, topic, string(event.AggregateID), event.Payload); err != nil {
+		if err := p.producer.Publish(ctx, topic, strconv.FormatInt(event.AggregateID, 10), event.Payload); err != nil {
 			p.logger.Error("failed to publish event",
 				zap.String("id", event.ID),
 				zap.String("type", event.EventType),

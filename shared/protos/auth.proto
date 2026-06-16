@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package auth;
+option go_package = "github.com/anwesha0425/url-shortener/services/url-service/internal/grpc/authpb";
+
+// AuthService — gRPC contract between internal services
+//
+// Why gRPC instead of REST for internal calls?
+//   - Protocol Buffers are ~5x smaller than JSON
+//   - HTTP/2 multiplexing: no head-of-line blocking
+//   - Strongly typed contracts enforced at compile time
+//   - ~10x faster serialization vs JSON for token payloads
+service AuthService {
+  // VerifyToken validates a JWT and returns the decoded claims.
+  // Called by url-service before every write operation.
+  rpc VerifyToken(VerifyTokenRequest) returns (VerifyTokenResponse);
+}
+
+message VerifyTokenRequest {
+  string access_token = 1;
+}
+
+message VerifyTokenResponse {
+  bool   valid   = 1;
+  string user_id = 2;
+  string email   = 3;
+  string tier    = 4;   // "free" | "pro" | "enterprise"
+}

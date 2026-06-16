@@ -13,6 +13,7 @@ import { apiKeyRouter } from './routes/apikey.routes';
 import { metricsRouter } from './routes/metrics.routes';
 import { errorHandler } from './middleware/errorHandler';
 import { runMigrations } from './database/migrations';
+import { startGrpcServer } from './grpc/server';
 
 const app = express();
 
@@ -54,8 +55,11 @@ async function bootstrap() {
     await runMigrations(db);
     logger.info('Migrations complete');
 
+    // Start gRPC server (internal) on port 50051
+    startGrpcServer(50051);
+
     server.listen(config.PORT, () => {
-      logger.info(`Auth Service running on port ${config.PORT}`);
+      logger.info(`Auth Service HTTP running on port ${config.PORT}`);
     });
   } catch (err) {
     logger.error('Bootstrap failed', { err });

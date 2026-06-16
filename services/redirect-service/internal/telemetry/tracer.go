@@ -15,33 +15,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-/**
- * OpenTelemetry — Distributed Tracing Setup
- *
- * Purpose: Gives visibility into exactly where latency comes from.
- * When a redirect takes 80ms instead of 5ms, we need to know:
- *   - Was it Redis? (cache miss / slow query)
- *   - Was it PostgreSQL? (slow scan / lock contention)
- *   - Was it the Kafka producer? (broker backpressure)
- *
- * Architecture:
- *   Service → OTLP exporter → Jaeger collector → Jaeger UI
- *
- * W3C TraceContext: trace IDs flow via "traceparent" HTTP header
- * across ALL service boundaries automatically.
- *
- * Example trace for a redirect (cache MISS):
- *   redirect-service (total: 45ms)
- *     └─ redis.GET        2ms  ← cache MISS
- *     └─ circuit-breaker  0ms  ← CLOSED
- *     └─ postgres.SELECT 38ms  ← slow! missing index?
- *     └─ kafka.Produce    4ms
- */
-
 var tracer trace.Tracer
 
-// InitTracer configures the global OpenTelemetry provider.
-// Returns a shutdown function that flushes all pending spans.
+// InitTracer configures OTel for the redirect service.
+// The redirect service is the HOT PATH — tracing is critical here
+// to identify whether latency comes from Redis, DB, or Kafka.
 func InitTracer(serviceName, jaegerEndpoint string) (func(context.Context) error, error) {
 	exporter, err := otlptracehttp.New(context.Background(),
 		otlptracehttp.WithEndpoint(jaegerEndpoint),
@@ -66,10 +44,9 @@ func InitTracer(serviceName, jaegerEndpoint string) (func(context.Context) error
 			sdktrace.WithBatchTimeout(5*time.Second),
 		),
 		sdktrace.WithResource(res),
-		// 10% sampling in production to reduce overhead.
-		// Error spans are always sampled (100%) via custom sampler.
+		// Redirect service: sample only 5% to avoid overhead on hot path
 		sdktrace.WithSampler(
-			sdktrace.ParentBased(sdktrace.TraceIDRatioBased(0.1)),
+			sdktrace.ParentBased(sdktrace.TraceIDRatioBased(0.05)),
 		),
 	)
 
@@ -85,7 +62,7 @@ func InitTracer(serviceName, jaegerEndpoint string) (func(context.Context) error
 
 func Tracer() trace.Tracer {
 	if tracer == nil {
-		return otel.Tracer("url-shortener")
+		return otel.Tracer("redirect-service")
 	}
 	return tracer
 }

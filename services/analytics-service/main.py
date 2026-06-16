@@ -2,6 +2,7 @@
 Analytics Service — Main Application
 Consumes Kafka click events and provides analytics APIs + real-time WebSocket feed
 """
+
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -34,7 +35,7 @@ async def lifespan(app: FastAPI):
         topic="url.clicked",
         group_id="analytics-aggregator",
         ch_client=clickhouse_client,
-        ws_manager=ws_manager,          # 🔌 Real-time WebSocket push
+        ws_manager=ws_manager,  # 🔌 Real-time WebSocket push
     )
     consumer_task = asyncio.create_task(consumer.start())
     logger.info("Kafka consumer started")

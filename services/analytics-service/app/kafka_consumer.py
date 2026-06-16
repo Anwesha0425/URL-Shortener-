@@ -124,20 +124,25 @@ class ClickEventConsumer:
         self.batch = []
 
         try:
-            await self.ch_client.insert(
-                "url_clicks",
-                batch_to_flush,
-                column_names=[
-                    "short_code",
-                    "clicked_at",
-                    "country",
-                    "referrer",
-                    "user_agent",
-                    "ip_hash",
-                ],
+            # clickhouse_connect is synchronous, so we use run_in_executor to avoid blocking the event loop
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: self.ch_client.insert(
+                    "url_clicks",
+                    batch_to_flush,
+                    column_names=[
+                        "short_code",
+                        "clicked_at",
+                        "country",
+                        "referrer",
+                        "user_agent",
+                        "ip_hash",
+                    ],
+                )
             )
             logger.info(f"Flushed {len(batch_to_flush)} events to ClickHouse")
         except Exception as e:
-            logger.error(f"Failed to flush to ClickHouse: {e}")
+            logger.exception("Failed to flush to ClickHouse")
             # Re-add to batch for retry
             self.batch = batch_to_flush + self.batch

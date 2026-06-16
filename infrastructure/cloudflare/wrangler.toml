@@ -1,0 +1,27 @@
+name = "url-shortener-edge"
+main = "worker.ts"
+compatibility_date = "2024-01-01"
+
+# ── KV Namespace (edge cache) ──────────────────────────────────────────
+[[kv_namespaces]]
+binding = "URL_CACHE"
+id      = "YOUR_KV_NAMESPACE_ID"
+
+# ── Environment variables ──────────────────────────────────────────────
+[vars]
+ORIGIN_URL      = "https://api.sho.rt"
+CACHE_TTL       = "3600"
+ANALYTICS_TOPIC = "url.clicked"
+
+# ── Routes (which hostnames this worker handles) ───────────────────────
+[[routes]]
+pattern = "sho.rt/*"
+zone_id = "YOUR_ZONE_ID"
+
+# ── Production environment ─────────────────────────────────────────────
+[env.production]
+vars = { ORIGIN_URL = "https://api.sho.rt", CACHE_TTL = "3600" }
+
+# ── Staging environment ────────────────────────────────────────────────
+[env.staging]
+vars = { ORIGIN_URL = "https://staging-api.sho.rt", CACHE_TTL = "60" }

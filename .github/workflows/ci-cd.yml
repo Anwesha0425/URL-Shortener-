@@ -1,0 +1,222 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/anwesha0425
+
+jobs:
+  # ────────────────────────────────────────────────────────────────
+  # JOB 1: Lint & Test — URL Service (Go)
+  # ────────────────────────────────────────────────────────────────
+  test-url-service:
+    name: Test URL Service (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/url-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run vet
+        run: go vet ./...
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: services/url-service/coverage.out
+
+  # ────────────────────────────────────────────────────────────────
+  # JOB 2: Test — Redirect Service (Go)
+  # ────────────────────────────────────────────────────────────────
+  test-redirect-service:
+    name: Test Redirect Service (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/redirect-service
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+      - run: go mod download
+      - run: go vet ./...
+      - run: go test -v -race ./...
+
+  # ────────────────────────────────────────────────────────────────
+  # JOB 3: Lint & Test — Auth Service (TypeScript)
+  # ────────────────────────────────────────────────────────────────
+  test-auth-service:
+    name: Test Auth Service (Node.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/auth-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: services/auth-service/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+  # ────────────────────────────────────────────────────────────────
+  # JOB 4: Lint — Analytics Service (Python)
+  # ────────────────────────────────────────────────────────────────
+  test-analytics-service:
+    name: Lint Analytics Service (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/analytics-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt ruff
+
+      - name: Lint with ruff
+        run: ruff check .
+
+  # ────────────────────────────────────────────────────────────────
+  # JOB 5: Build & Push Docker Images (only on main branch)
+  # ────────────────────────────────────────────────────────────────
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs:
+      - test-url-service
+      - test-redirect-service
+      - test-auth-service
+      - test-analytics-service
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        service:
+          - { name: url-service,           context: services/url-service,           port: 8001 }
+          - { name: redirect-service,      context: services/redirect-service,      port: 8002 }
+          - { name: analytics-service,     context: services/analytics-service,     port: 8003 }
+          - { name: auth-service,          context: services/auth-service,          port: 8004 }
+          - { name: notification-service,  context: services/notification-service,  port: 8005 }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.service.name }}
+          tags: |
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context:    ${{ matrix.service.context }}
+          push:       true
+          tags:       ${{ steps.meta.outputs.tags }}
+          labels:     ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+  # ────────────────────────────────────────────────────────────────
+  # JOB 6: Deploy to Kubernetes (after images are pushed)
+  # ────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
+
+      - name: Update image tags in manifests
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          sed -i "s|:latest|:main-${SHORT_SHA}|g" infrastructure/k8s/*.yaml
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f infrastructure/k8s/namespace-and-config.yaml
+          kubectl apply -f infrastructure/k8s/url-service.yaml
+          kubectl apply -f infrastructure/k8s/redirect-service.yaml
+          kubectl apply -f infrastructure/k8s/analytics-service.yaml
+          kubectl apply -f infrastructure/k8s/auth-service.yaml
+          kubectl apply -f infrastructure/k8s/notification-service.yaml
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/url-service        -n url-shortener --timeout=120s
+          kubectl rollout status deployment/redirect-service   -n url-shortener --timeout=120s
+          kubectl rollout status deployment/analytics-service  -n url-shortener --timeout=120s
+
+      - name: Verify deployment health
+        run: |
+          kubectl get pods -n url-shortener
+          echo "✅ Deployment successful"

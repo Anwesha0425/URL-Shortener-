@@ -1,0 +1,50 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: url-expiry-scheduler
+  namespace: url-shortener
+spec:
+  schedule: "*/5 * * * *"         # Every 5 minutes
+  concurrencyPolicy: Forbid        # Don't run if previous job still running
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 120   # Kill job if it runs > 2 minutes
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: scheduler
+              image: ghcr.io/anwesha0425/scheduler:latest
+              env:
+                - name: DB_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secret
+                      key: host
+                - name: DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secret
+                      key: user
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secret
+                      key: password
+                - name: DB_NAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secret
+                      key: dbname
+                - name: KAFKA_BROKERS
+                  value: "kafka-service:9092"
+              resources:
+                requests:
+                  cpu:    "100m"
+                  memory: "64Mi"
+                limits:
+                  cpu:    "200m"
+                  memory: "128Mi"

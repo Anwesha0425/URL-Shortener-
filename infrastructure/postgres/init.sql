@@ -49,4 +49,4 @@ INSERT INTO users (email, api_key, tier) VALUES
     ('demo@example.com', 'demo-api-key-12345', 'pro')
 ON CONFLICT (email) DO NOTHING;
 
-RAISE NOTICE 'Database initialized successfully ✅';
+DO $$ BEGIN RAISE NOTICE 'Database initialized successfully'; END $$;

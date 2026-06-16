@@ -151,6 +151,7 @@ services:
       - REDIS_PORT=6379
       - KAFKA_BROKERS=kafka:29092
       - JAEGER_ENDPOINT=http://jaeger:4318/v1/traces
+      - AUTH_GRPC_HOST=auth-service:50051
       - PORT=8001
     depends_on:
       postgres:
@@ -204,15 +205,39 @@ services:
       dockerfile: Dockerfile
     container_name: url_auth_service
     ports:
-      - "8004:8004"
+      - "8004:8004"   # REST API
+      - "50051:50051" # gRPC (internal service-to-service)
     environment:
       - DB_HOST=postgres
+      - DB_USER=urluser
+      - DB_PASSWORD=urlpassword
+      - DB_NAME=urldb
       - REDIS_HOST=redis
       - JWT_SECRET=your-super-secret-jwt-key-change-in-production
       - PORT=8004
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: url_notification_service
+    ports:
+      - "8005:8005"
+    environment:
+      - KAFKA_BROKERS=kafka:29092
+      - PORT=8005
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=
+      - SMTP_PASS=
+    depends_on:
+      kafka:
+        condition: service_healthy
 
 volumes:
   postgres_data:

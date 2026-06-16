@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: url-shortener
+  labels:
+    name: url-shortener
+---
+# Shared secrets (in production, use Sealed Secrets or Vault)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: url-shortener
+type: Opaque
+stringData:
+  host:     "postgres-service"
+  port:     "5432"
+  user:     "urluser"
+  password: "REPLACE_WITH_REAL_PASSWORD"
+  dbname:   "urldb"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jwt-secret
+  namespace: url-shortener
+type: Opaque
+stringData:
+  JWT_SECRET: "REPLACE_WITH_256_BIT_SECRET"
+---
+# Shared ConfigMap for non-sensitive config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: common-config
+  namespace: url-shortener
+data:
+  REDIS_HOST:      "redis-service"
+  REDIS_PORT:      "6379"
+  KAFKA_BROKERS:   "kafka-service:9092"
+  JAEGER_ENDPOINT: "http://jaeger-service:4318/v1/traces"
+  BASE_URL:        "https://sho.rt"

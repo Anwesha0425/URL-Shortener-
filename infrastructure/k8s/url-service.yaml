@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: url-service
+  namespace: url-shortener
+  labels:
+    app: url-service
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: url-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0          # Zero-downtime deploys
+  template:
+    metadata:
+      labels:
+        app: url-service
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "8001"
+        prometheus.io/path:   "/metrics"
+    spec:
+      containers:
+        - name: url-service
+          image: ghcr.io/anwesha0425/url-service:latest
+          ports:
+            - containerPort: 8001
+          env:
+            - name: PORT
+              value: "8001"
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: host
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: user
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: dbname
+            - name: REDIS_HOST
+              value: "redis-service"
+            - name: KAFKA_BROKERS
+              value: "kafka-service:9092"
+            - name: JAEGER_ENDPOINT
+              value: "http://jaeger-service:4318/v1/traces"
+          resources:
+            requests:
+              cpu:    "250m"
+              memory: "256Mi"
+            limits:
+              cpu:    "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]  # Allow in-flight requests to finish
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: url-service
+  namespace: url-shortener
+spec:
+  selector:
+    app: url-service
+  ports:
+    - port: 8001
+      targetPort: 8001
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: url-service-hpa
+  namespace: url-shortener
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind:       Deployment
+    name:       url-service
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type:               Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type:               Utilization
+          averageUtilization: 80

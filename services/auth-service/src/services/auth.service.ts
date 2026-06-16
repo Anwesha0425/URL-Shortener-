@@ -107,13 +107,13 @@ export function verifyAccessToken(token: string): TokenPayload {
 // ── Internal ──────────────────────────────────────────────────────
 function issueTokens(payload: TokenPayload): AuthTokens {
   const accessToken = jwt.sign(payload, config.JWT_SECRET, {
-    expiresIn: config.JWT_ACCESS_EXPIRES,
+    expiresIn: 15 * 60,          // 15 minutes in seconds
     issuer: 'url-shortener',
     audience: 'url-shortener-clients',
   });
 
   const refreshToken = jwt.sign(payload, config.JWT_SECRET, {
-    expiresIn: config.JWT_REFRESH_EXPIRES,
+    expiresIn: 7 * 24 * 60 * 60, // 7 days in seconds
     issuer: 'url-shortener',
     audience: 'url-shortener-clients',
   });
